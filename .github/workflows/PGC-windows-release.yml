@@ -70,6 +70,10 @@ jobs:
             if (Test-Path -LiteralPath $setupLog) {
               $logContent = Get-Content -LiteralPath $setupLog -Raw
               if ($logContent -match 'ExitCode=([0-9]+)') { $scriptExit = $Matches[1] }
+              $scriptLine = 'unknown'
+              $lineMatches = [regex]::Matches($logContent, 'install\.ps1:(\d+)')
+              if ($lineMatches.Count -gt 0) { $scriptLine = $lineMatches[$lineMatches.Count - 1].Groups[1].Value }
+              Write-Host "INSTALL_DIAG script_line=$scriptLine"
             }
             $registered = [bool](Get-Service -Name PGCConnector -ErrorAction SilentlyContinue)
             Write-Host "INSTALL_DIAG script_exit=$scriptExit service_registered=$registered"
