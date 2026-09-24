@@ -1,0 +1,60 @@
+name: Build PGC Connector installer from source ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'PGC-Connector-1.2.1-reviewed-source.zip'
+      - '.github/workflows/PGC-windows-release.yml'
+
+jobs:
+  windows-installer:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Extract and check source archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.1-reviewed-source.zip'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
+          try {
+            foreach ($required in @('pgc-connector/PGC.Connector.sln', 'pgc-connector/scripts/build-release.ps1', 'pgc-connector/installer/PGC.Connector.Setup/Program.cs')) {
+              if (-not $zip.GetEntry($required)) { throw "Missing source file: $required" }
+            }
+          } finally { $zip.Dispose() }
+          Expand-Archive -LiteralPath $archive -DestinationPath $env:GITHUB_WORKSPACE -Force
+      - name: Build, run unit tests and publish installer
+        shell: pwsh
+        working-directory: pgc-connector
+        run: ./scripts/build-release.ps1
+      - name: Verify installer and payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.1-x64.exe'
+          if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'Installer was not published.' }
+          $payload = Join-Path $env:GITHUB_WORKSPACE 'output/pgc-installer-payload.zip'
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($payload)
+          try {
+            foreach ($required in @('install.ps1','service/PGC.Connector.Service.exe','desktop/PGC.Connector.Desktop.exe')) {
+              if (-not $zip.GetEntry($required)) { throw "Missing installer member: $required" }
+            }
+          } finally { $zip.Dispose() }
+          $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash
+          $size = (Get-Item -LiteralPath $setup).Length
+          "SHA256=$hash" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'installer-checksum.txt') -Encoding ascii
+          "SIZE=$size" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'installer-checksum.txt') -Append -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PGC-Connector-1.2.1-Windows-installer
+          path: |
+            pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.1-x64.exe
+            installer-checksum.txt
+          if-no-files-found: error
