@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'PGC-Connector-1.2.1-reviewed-source.zip'
+      - 'PGC-Connector-1.2.2-reviewed-source.zip'
       - '.github/workflows/PGC-windows-release.yml'
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.1-reviewed-source.zip'
+          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.2-reviewed-source.zip'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
           try {
@@ -38,7 +38,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.1-x64.exe'
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.2-x64.exe'
           if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'Installer was not published.' }
           $payload = Join-Path $env:GITHUB_WORKSPACE 'output/pgc-installer-payload.zip'
           $zip = [System.IO.Compression.ZipFile]::OpenRead($payload)
@@ -51,10 +51,44 @@ jobs:
           $size = (Get-Item -LiteralPath $setup).Length
           "SHA256=$hash" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'installer-checksum.txt') -Encoding ascii
           "SIZE=$size" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'installer-checksum.txt') -Append -Encoding ascii
+      - name: Smoke test installer and Windows service
+        shell: pwsh
+        timeout-minutes: 5
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.2-x64.exe'
+          $principal = [Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+          if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            throw 'Windows runner is not elevated; installer smoke test cannot run.'
+          }
+          $setupProcess = Start-Process -FilePath $setup -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 90; $i++) {
+              Start-Sleep -Seconds 1
+              $service = Get-Service -Name PGCConnector -ErrorAction SilentlyContinue
+              if ($service -and $service.Status -eq 'Running') {
+                try {
+                  $health = Invoke-RestMethod -Uri 'http://127.0.0.1:47831/local/health' -TimeoutSec 2
+                  if ($health.ok -eq $true) { $ready = $true; break }
+                } catch { }
+              }
+              if ($setupProcess.HasExited) { break }
+            }
+            if (-not $ready) { throw 'Installer failed to start a healthy Windows service.' }
+            $shortcut = Join-Path $env:ProgramData 'Microsoft/Windows/Start Menu/Programs/PGC Connector/PGC Connector.lnk'
+            if (-not (Test-Path -LiteralPath $shortcut)) { throw 'Windows Search shortcut is missing.' }
+            $desktop = Join-Path $env:ProgramFiles 'PGC Connector/desktop/PGC.Connector.Desktop.exe'
+            if (-not (Test-Path -LiteralPath $desktop)) { throw 'Desktop executable is missing.' }
+            $token = Join-Path $env:ProgramData 'PGC/Connector/local-admin-token.txt'
+            if (-not (Test-Path -LiteralPath $token)) { throw 'Operator cannot read the local token.' }
+          } finally {
+            if (-not $setupProcess.HasExited) { Stop-Process -Id $setupProcess.Id -Force }
+          }
       - uses: actions/upload-artifact@v4
         with:
-          name: PGC-Connector-1.2.1-Windows-installer
+          name: PGC-Connector-1.2.2-Windows-installer
           path: |
-            pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.1-x64.exe
+            pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.2-x64.exe
             installer-checksum.txt
           if-no-files-found: error
