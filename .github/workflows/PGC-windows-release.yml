@@ -75,7 +75,13 @@ jobs:
               }
               if ($setupProcess.HasExited) { break }
             }
-            if (-not $ready) { throw 'Installer failed to start a healthy Windows service.' }
+            if (-not $ready) {
+              Write-Host "Installer exited: $($setupProcess.HasExited)"
+              if ($setupProcess.HasExited) { Write-Host "Installer exit code: $($setupProcess.ExitCode)" }
+              $state = Get-Service -Name PGCConnector -ErrorAction SilentlyContinue
+              Write-Host "Service state: $(if ($state) { $state.Status } else { 'Not installed' })"
+              throw 'Installer failed to start a healthy Windows service.'
+            }
             $shortcut = Join-Path $env:ProgramData 'Microsoft/Windows/Start Menu/Programs/PGC Connector/PGC Connector.lnk'
             if (-not (Test-Path -LiteralPath $shortcut)) { throw 'Windows Search shortcut is missing.' }
             $desktop = Join-Path $env:ProgramFiles 'PGC Connector/desktop/PGC.Connector.Desktop.exe'
