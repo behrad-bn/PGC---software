@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'PGC-Connector-1.2.2-reviewed-source.zip'
+      - 'PGC-Connector-1.2.2-source.zip'
       - '.github/workflows/PGC-windows-release.yml'
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.2-reviewed-source.zip'
+          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.2-source.zip'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
           try {
