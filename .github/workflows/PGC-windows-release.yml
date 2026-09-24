@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'PGC-Connector-1.2.8-source.zip'
+      - 'PGC-Connector-1.2.9-source.zip'
       - '.github/workflows/PGC-windows-release.yml'
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.8-source.zip'
+          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.9-source.zip'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
           try {
@@ -38,7 +38,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.8-x64.exe'
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.9-x64.exe'
           if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'Installer was not published.' }
           $payload = Join-Path $env:GITHUB_WORKSPACE 'output/pgc-installer-payload.zip'
           $zip = [System.IO.Compression.ZipFile]::OpenRead($payload)
@@ -62,7 +62,7 @@ jobs:
           if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
             throw 'Windows runner is not elevated; installation cannot be tested.'
           }
-          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.8-x64.exe'
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.9-x64.exe'
           $installProcess = Start-Process -FilePath $setup -ArgumentList '--quiet' -PassThru -Wait
           if ($installProcess.ExitCode -ne 0) {
             $setupLog = Join-Path $env:ProgramData 'PGC/Connector/setup-logs/setup.log'
@@ -96,8 +96,8 @@ jobs:
           if (-not (Test-Path -LiteralPath $token)) { throw 'Operator cannot read local token.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: PGC-Connector-1.2.8-Windows-installer
+          name: PGC-Connector-1.2.9-Windows-installer
           path: |
-            pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.8-x64.exe
+            pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.9-x64.exe
             installer-checksum.txt
           if-no-files-found: error
