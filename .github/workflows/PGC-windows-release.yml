@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'PGC-Connector-1.2.2-source.zip'
+      - 'PGC-Connector-1.2.3-source.zip'
       - '.github/workflows/PGC-windows-release.yml'
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.2-source.zip'
+          $archive = Join-Path $env:GITHUB_WORKSPACE 'PGC-Connector-1.2.3-source.zip'
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead($archive)
           try {
@@ -38,7 +38,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.2-x64.exe'
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.3-x64.exe'
           if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'Installer was not published.' }
           $payload = Join-Path $env:GITHUB_WORKSPACE 'output/pgc-installer-payload.zip'
           $zip = [System.IO.Compression.ZipFile]::OpenRead($payload)
@@ -51,7 +51,7 @@ jobs:
           $size = (Get-Item -LiteralPath $setup).Length
           "SHA256=$hash" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'installer-checksum.txt') -Encoding ascii
           "SIZE=$size" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'installer-checksum.txt') -Append -Encoding ascii
-      - name: Smoke test packaged installation on Windows
+      - name: Smoke test actual installer on Windows
         shell: pwsh
         timeout-minutes: 4
         run: |
@@ -60,10 +60,9 @@ jobs:
           if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
             throw 'Windows runner is not elevated; installation cannot be tested.'
           }
-          $payload = Join-Path $env:GITHUB_WORKSPACE 'output/pgc-installer-payload.zip'
-          $staging = Join-Path $env:RUNNER_TEMP 'pgc-installer-test'
-          Expand-Archive -LiteralPath $payload -DestinationPath $staging -Force
-          & (Join-Path $staging 'install.ps1')
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.3-x64.exe'
+          $installProcess = Start-Process -FilePath $setup -ArgumentList '--quiet' -PassThru -Wait
+          if ($installProcess.ExitCode -ne 0) { throw "Installer failed with code $($installProcess.ExitCode)." }
           $service = Get-Service -Name PGCConnector -ErrorAction Stop
           if ($service.Status -ne 'Running') { throw 'Windows service is not running.' }
           $health = Invoke-RestMethod -Uri 'http://127.0.0.1:47831/local/health' -TimeoutSec 5
@@ -76,8 +75,8 @@ jobs:
           if (-not (Test-Path -LiteralPath $token)) { throw 'Operator cannot read local token.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: PGC-Connector-1.2.2-Windows-installer
+          name: PGC-Connector-1.2.3-Windows-installer
           path: |
-            pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.2-x64.exe
+            pgc-connector/artifacts/installer/PGC-Connector-Setup-1.2.3-x64.exe
             installer-checksum.txt
           if-no-files-found: error
